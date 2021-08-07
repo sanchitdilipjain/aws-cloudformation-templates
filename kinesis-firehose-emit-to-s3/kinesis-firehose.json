@@ -1,0 +1,332 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This cft launches kinesis firehose",
+  "Parameters": {
+    "KinesisFirehoseName": {
+      "Type": "String",
+      "Description": "enter the name of the kinesis firehose"
+    },
+    "S3BufferInterval": {
+      "Type": "Number",
+      "Description": "enter the buffer interval for putting firehose data into S3"
+    },
+    "S3BufferSize": {
+      "Type": "Number",
+      "Description": "enter the buffer size for putting firehose data into S3"
+    },
+    "S3InputPrefix": {
+      "Type": "String",
+      "Description": "enter the input data prefix for the firehose data"
+    }
+  },
+  "Resources": {
+    "StreamingAnalyticsBucket": {
+      "Type": "AWS::S3::Bucket"
+    },
+    "CloudWatchLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Join": [
+            "",
+            [
+              "/aws/kinesisfirehose/",
+              {
+                "Ref": "KinesisFirehoseName"
+              }
+            ]
+          ]
+        }
+      }
+    },
+    "CloudWatchLogStream": {
+      "Type": "AWS::Logs::LogStream",
+      "Properties": {
+        "LogGroupName": {
+          "Ref": "CloudWatchLogGroup"
+        },
+        "LogStreamName": "S3Delivery"
+      }
+    },
+    "kinesisRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "firehose.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Ref": "AWS::AccountId"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": {
+              "Fn::Join": [
+                "",
+                [
+                  "Leaseplan-Raw-Data-to-S3-Delivery-",
+                  {
+                    "Ref": "AWS::StackName"
+                  }
+                ]
+              ]
+            },
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Sid": "",
+                  "Effect": "Allow",
+                  "Action": [
+                    "glue:GetTableVersions"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Sid": "",
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:AbortMultipartUpload",
+                    "s3:GetBucketLocation",
+                    "s3:GetObject",
+                    "s3:ListBucket",
+                    "s3:ListBucketMultipartUploads",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "StreamingAnalyticsBucket"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:s3:::",
+                          {
+                            "Ref": "StreamingAnalyticsBucket"
+                          },
+                          "/*"
+                        ]
+                      ]
+                    },
+                    "arn:aws:s3:::%FIREHOSE_BUCKET_NAME%",
+                    "arn:aws:s3:::%FIREHOSE_BUCKET_NAME%/*"
+                  ]
+                },
+                {
+                  "Sid": "",
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction",
+                    "lambda:GetFunctionConfiguration"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:lambda:",
+                        {
+                          "Ref": "AWS::Region"
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":function:",
+                        "%FIREHOSE_DEFAULT_FUNCTION%:%FIREHOSE_DEFAULT_VERSION%"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Sid": "",
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:logs:",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          ":",
+                          {
+                            "Ref": "AWS::AccountId"
+                          },
+                          ":log-group:/aws/kinesisfirehose/",
+                          {
+                            "Ref": "KinesisFirehoseName"
+                          },
+                          ":log-stream:*"
+                        ]
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "Sid": "",
+                  "Effect": "Allow",
+                  "Action": [
+                    "kinesis:DescribeStream",
+                    "kinesis:GetShardIterator",
+                    "kinesis:GetRecords"
+                  ],
+                  "Resource": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:kinesis:",
+                        {
+                          "Ref": "AWS::Region"
+                        },
+                        ":",
+                        {
+                          "Ref": "AWS::AccountId"
+                        },
+                        ":stream/",
+                        "%FIREHOSE_STREAM_NAME%"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Join": [
+                        "",
+                        [
+                          "arn:aws:kms:",
+                          {
+                            "Ref": "AWS::Region"
+                          },
+                          ":",
+                          {
+                            "Ref": "AWS::AccountId"
+                          },
+                          ":key/",
+                          "%SSE_KEY_ID%"
+                        ]
+                      ]
+                    }
+                  ],
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": "kinesis.%REGION_NAME%.amazonaws.com"
+                    },
+                    "StringLike": {
+                      "kms:EncryptionContext:aws:kinesis:arn": {
+                        "Fn::Join": [
+                          "",
+                          [
+                            "arn:aws:kinesis:",
+                            {
+                              "Ref": "AWS::Region"
+                            },
+                            ":",
+                            {
+                              "Ref": "AWS::AccountId"
+                            },
+                            ":stream/",
+                            "%FIREHOSE_STREAM_NAME%"
+                          ]
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "leaspeplanInput": {
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamName": {
+          "Ref": "KinesisFirehoseName"
+        },
+        "DeliveryStreamType": "DirectPut",
+        "ExtendedS3DestinationConfiguration": {
+          "BucketARN": {
+            "Fn::Join": [
+              "",
+              [
+                "arn:aws:s3:::",
+                {
+                  "Ref": "StreamingAnalyticsBucket"
+                }
+              ]
+            ]
+          },
+          "BufferingHints": {
+            "IntervalInSeconds": {
+              "Ref": "S3BufferInterval"
+            },
+            "SizeInMBs": {
+              "Ref": "S3BufferSize"
+            }
+          },
+          "CloudWatchLoggingOptions": {
+            "Enabled": "True",
+            "LogGroupName": {
+              "Ref": "CloudWatchLogGroup"
+            },
+            "LogStreamName": {
+              "Ref": "CloudWatchLogStream"
+            }
+          },
+          "CompressionFormat": "UNCOMPRESSED",
+          "Prefix": {
+            "Ref": "S3InputPrefix"
+          },
+          "RoleARN": {
+            "Fn::GetAtt": [
+              "kinesisRole",
+              "Arn"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "KinesisFirehoseName": {
+      "Value": {
+        "Ref": "KinesisFirehoseName"
+      }
+    }
+  }
+}
