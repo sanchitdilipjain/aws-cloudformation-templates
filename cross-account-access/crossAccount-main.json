@@ -1,0 +1,67 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "It will creates the cross role template",
+  "Parameters": {
+    "Arn": {
+      "Description": "Enter the Arn of main account",
+      "Type": "String",
+      "Default": ""
+    },
+    "PolicyName": {
+      "Description": "Enter the name you want to assign to policy",
+      "Type": "String",
+      "Default": ""
+    },
+    "S3Role": {
+      "Description": "Existing S3Role ",
+      "Type": "String",
+      "Default": "S3"
+    }
+  },
+  "Resources": {
+    "CrossPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": {
+          "Ref": "PolicyName"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "sts:AssumeRole",
+              "Resource": {
+                "Ref": "Arn"
+              }
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "S3Role"
+          }
+        ]
+      }
+    },
+    "IamInstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "S3Role"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "IamInstanceProfile": {
+      "Value": {
+        "Ref": "IamInstanceProfile"
+      },
+      "Description": "IamInstanceProfile"
+    }
+  }
+}
