@@ -1,0 +1,207 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "This cft creates lambda function triggered by kinesis analytics",
+    "Parameters": {
+        "AnalyticsFunctionName": {
+            "Type": "String",
+            "Description": "enter the name of the analytics lambda function"
+        },
+        "AnalyticsFunctionTimeout": {
+            "Type": "Number",
+            "Default":"900",
+            "Description": "enter the timeout value of the analytics lambda function"
+        },
+        "AnalyticsFunctionMemory": {
+            "Type": "Number",
+            "Description": "enter the memory requirements of analytics lambda"
+        },
+        "AnalyticsFunctionHandler": {
+            "Type": "String",
+            "Description": "enter the handler value of the analytics lambda function"
+        },
+        "AnalyticsCodeBucketName": {
+            "Type": "String",
+            "Description": "enter the name of the bucket where the analytics lambda code resides"
+        },
+        "AnalyticsCodeBucketKey": {
+            "Type": "String",
+            "Description": "enter the key of the analytics lambda jar file"
+        },
+        "KinesisAnalyticsApplicationName": {
+            "Type": "String",
+            "Description": "the name of the analytics applciation which will have this lambda as the output"
+        },
+        "KinesisAnalyticsRole": {
+            "Type": "String",
+            "Description": "the role being used by the analytics application to input data into lambda"
+        },
+        "AnalyticsOutputFormat": {
+            "Type": "String",
+            "Description": "enter the kinesis analytics application output format"
+        }
+    },
+    "Resources": {
+        "lambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "events.amazonaws.com",
+                                    "lambda.amazonaws.com"
+                                ]
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Join": [
+                                "",
+                                [
+                                    "LeaseplanKinesisAnalyticsLambdaRole-",
+                                    {
+                                        "Ref": "AWS::StackName"
+                                    }
+                                ]
+                            ]
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:*",
+                                        "athena:*",
+                                        "s3:*"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Join": [
+                                            "",
+                                            [
+                                                "arn:aws:lambda:",
+                                                {
+                                                    "Ref": "AWS::Region"
+                                                },
+                                                ":",
+                                                {
+                                                    "Ref": "AWS::AccountId"
+                                                },
+                                                ":function:",
+                                                {
+                                                    "Ref": "AnalyticsFunctionName"
+                                                }
+                                            ]
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "lambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "Code": {
+                    "S3Bucket": {
+                        "Ref": "AnalyticsCodeBucketName"
+                    },
+                    "S3Key": {
+                        "Ref": "AnalyticsCodeBucketKey"
+                    }
+                },
+                "Handler": {
+                    "Ref": "AnalyticsFunctionHandler"
+                },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "lambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Runtime": "java8",
+                "FunctionName":
+                {
+                    "Ref": "AnalyticsFunctionName"
+                },
+                "MemorySize": {
+                    "Ref": "AnalyticsFunctionMemory"
+                },
+                "Timeout": {
+                    "Ref": "AnalyticsFunctionTimeout"
+                },
+                "Description": "Lambda triggered by kinesis analytics"
+            }
+        },
+        "KinesisAnalyticsOutputLambda": {
+            "Type": "AWS::KinesisAnalytics::ApplicationOutput",
+            "Properties": {
+                "ApplicationName": 
+                {
+                    "Ref": "KinesisAnalyticsApplicationName"
+                },
+                "Output": {
+                    "DestinationSchema": {
+                        "RecordFormatType": {
+                            "Ref": "AnalyticsOutputFormat"
+                        }
+                    },
+                    "LambdaOutput": {
+                        "ResourceARN": {
+                            "Fn::GetAtt": [
+                                "lambdaFunction",
+                                "Arn"
+                            ]
+                        },
+                        "RoleARN": {
+                            "Ref": "KinesisAnalyticsRole"
+                        }
+                    },
+                    "Name": "LAMBDA_OUTPUT_STREAM"
+                }
+            }
+        },
+        "PermissionForEventsToInvokeLambda": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": 
+                {
+                    "Ref": "AnalyticsFunctionName"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "kinesisanalytics.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Join": [
+                        "",
+                        [
+                            "arn:aws:kinesis:",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            ":",
+                            {
+                                "Ref": "AWS::AccountId"
+                            },
+                            ":stream/",
+                            {
+                                "Ref": "KinesisAnalyticsApplicationName"
+                            }
+                        ]
+                    ]
+                }
+            },
+            "DependsOn": [
+                "lambdaFunction"
+            ]
+        }
+    }
+}
