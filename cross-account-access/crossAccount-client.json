@@ -1,0 +1,75 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This is CrossRole CFT",
+  "Parameters": {
+    "Arn": {
+      "Description": "Enter the Arn of main account",
+      "Type": "String",
+      "Default": ""
+    }
+  },
+  "Resources": {
+    "CrossAccountRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Ref": "Arn"
+                }
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "CrossAccountPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "IAMInstancePolicy",
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": "*",
+              "Resource": "*"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "CrossAccountRole"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "customCrossRole": {
+      "Value": {
+        "Ref": "CrossAccountRole"
+      },
+      "Description": "CrossAccountRole"
+    },
+    "CrossAccountPolicy": {
+      "Value": {
+        "Ref": "CrossAccountPolicy"
+      },
+      "Description": "Policy"
+    },
+    "customCrossRoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CrossAccountRole",
+          "Arn"
+        ]
+      }
+    }
+  }
+}
